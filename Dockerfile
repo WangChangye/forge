@@ -1,5 +1,5 @@
 FROM scratch
 ADD httpsrv /
 ADD htdocs /htdocs
-RUN chmod 755 /httpsrv
+RUN sudo chmod 755 /httpsrv
 ENTRYPOINT ["/httpsrv"]
