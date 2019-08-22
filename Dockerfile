@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM scracth
 ADD httpsrv /
 ADD htdocs /htdocs
 RUN chmod 755 /httpsrv
