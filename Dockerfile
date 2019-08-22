@@ -1,6 +1,6 @@
 #FROM scratch
 #FROM busybox
-FROM gcc
+FROM amd64/gcc:8
 ADD fnt_http_fun.c /
 ADD fnt_http_fun.h /
 ADD http_server.c /
