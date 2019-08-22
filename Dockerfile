@@ -1,6 +1,9 @@
 #FROM scratch
-FROM busybox
-ADD httpsrv /
+#FROM busybox
+FROM gcc
+ADD fnt_http_fun.c /
+ADD fnt_http_fun.h /
+ADD http_server.c /
 ADD htdocs /htdocs
-RUN chmod 755 /httpsrv
-ENTRYPOINT ["/httpsrv>log 2>&1"]
+RUN gcc --static -o /httpsrv fnt_http_fun.c http_server.c
+ENTRYPOINT ["/httpsrv"]
