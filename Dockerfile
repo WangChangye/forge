@@ -1,4 +1,4 @@
-FROM scracth
+FROM scratch
 ADD httpsrv /
 ADD htdocs /htdocs
 RUN chmod 755 /httpsrv
