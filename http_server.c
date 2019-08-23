@@ -129,7 +129,7 @@ void accept_request(int client)
 
     // First line, the string before the first space, identifys the method of the request
     numchars = get_line(client, buf, sizeof(buf));
-    fp=fopen("fnt.log",at+);
+    fp=fopen("fnt.log","at+");
     fputs(buf,fp);
     fclose(fp);
     if ( (numchars<strlen("GET /\n"))||(strlen(buf)<strlen("GET /\n")) )
