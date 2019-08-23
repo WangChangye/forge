@@ -29,6 +29,77 @@ void serve_file(int, const char *);
 int startup(u_short *);
 void handle_post_req(int);
 void resp_msg(int, char *, char *, char *);
+
+struct request{
+    int mask=0;
+    char method[8];
+    char url[128];
+    char data[128];
+    int content_len;
+};
+
+struct request parse_req(int client)
+  {
+    char buf[128],buf1[8];
+    struct request rh;
+    int res=0, n=0, i, j;
+    n = get_line(client, buf, sizeof(buf));
+    if (!n || (strlen(buf)<strlen("GET /\n")))
+      {
+        printf("<< Noise.\n");
+        close(client);
+        shutdown(client,2);
+        return 0;
+      }
+    i=0;
+    while ( (i<strlen(buf)) && !ISspace(buf[i]) && (i<7))
+      {
+        rh.method[i] = buf[i];
+        i++;
+      }
+    rh.method[i] = '\0';
+    while ((i<strlen(buf)) && ISspace(buf[i]))
+      {
+        i++;
+      }
+    j=0;
+    while ( (i<strlen(buf)) && !ISspace(buf[i]) && (j<127))
+      {
+        rh.url[j] = buf[i];
+        i++;
+        j++;
+      }
+    rh.url[j] = '\0';
+
+    while ((n > 0) && strcmp("\n", buf))
+      {
+        j=strlen(buf);
+        i=0;
+        while((i<j)&&(buf[i]!=':'))
+            i++;
+        if(i>(j-2))
+            continue;
+        buf[i]='\0';
+        i++;
+        while((i<j)&&(ISspace(buf[i])))
+            i++;
+        n=i;
+        while((i<j)&&(!ISspace(buf[i])))
+            i++;
+        if((n<i)&&(i<j))
+          {
+            buf[i]='\0';
+            if(strcmp(buf,"Content-Length")==0)
+               {
+                  rh.content_len=atoi(&(buf[i]));
+                  rh.mask=rh.mask|1;
+               }
+          }
+        n = get_line(client, buf, sizeof(buf));
+      }
+    return rh;
+  }
+
 /**********************************************************************/
 /* A request has caused a call to accept() on the server port to
  * return.  Process the request appropriately.
