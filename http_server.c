@@ -45,7 +45,7 @@ struct request parse_req(int client)
     rh.mask=0;
     int n=0, i, j;
     n = get_line(client, buf, sizeof(buf));
-    strcpy(rh.data,buf,strlen(buf));
+    memcpy(rh.data,buf,strlen(buf));
     i=0;
     while ( (i<strlen(buf)) && !ISspace(buf[i]) && (i<7))
       {
@@ -71,7 +71,7 @@ struct request parse_req(int client)
       {
         j=strlen(buf);
         if(j+strlen(rh.data)<1024)
-            strcpy(rh.data+strlen(rh.data),buf,j);
+            memcpy(rh.data+strlen(rh.data),buf,j);
         i=0;
         while((i<j)&&(buf[i]!=':'))
             i++;
@@ -118,7 +118,7 @@ void accept_request(int client)
     char *query_string = NULL;
     const char *server_root="./htdocs/";
 //======================================================
-    struct req=parse_req(client);
+    struct request req=parse_req(client);
     resp_msg(client, "200 ok", "echo", req.data);
     return;
 //======================================================
