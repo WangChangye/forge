@@ -45,7 +45,8 @@ struct request parse_req(int client)
     rh.mask=0;
     int n=0, i, j;
     n = get_line(client, buf, sizeof(buf));
-    memcpy(rh.data,buf,strlen(buf));
+    //memcpy(rh.data,buf,strlen(buf));
+    rh.data="wwwwwwwwwwwwww\n\0";
     i=0;
     while ( (i<strlen(buf)) && !ISspace(buf[i]) && (i<7))
       {
@@ -70,8 +71,8 @@ struct request parse_req(int client)
     while ((n > 0) && strcmp("\n", buf))
       {
         j=strlen(buf);
-        if(j+strlen(rh.data)<1024)
-            memcpy(rh.data+strlen(rh.data),buf,j);
+        //if(j+strlen(rh.data)<1024)
+        //    memcpy(rh.data+strlen(rh.data),buf,j);
         i=0;
         while((i<j)&&(buf[i]!=':'))
             i++;
