@@ -30,6 +30,8 @@ int startup(u_short *);
 void handle_post_req(int);
 void resp_msg(int, char *, char *, char *);
 
+FILE *fp;
+
 struct request{
     int mask;
     char method[8];
@@ -119,14 +121,17 @@ void accept_request(int client)
     char *query_string = NULL;
     const char *server_root="./htdocs/";
 //======================================================
-    struct request req=parse_req(client);
-    resp_msg(client, "200 ok", "echo", req.data);
-    return;
+//    struct request req=parse_req(client);
+//    resp_msg(client, "200 ok", "echo", req.data);
+//    return;
 //======================================================
     memset(parm,'\0', 2*32*sizeof(char) );
 
     // First line, the string before the first space, identifys the method of the request
     numchars = get_line(client, buf, sizeof(buf));
+    fp=fopen("fnt.log",at+);
+    fputs(buf,fp);
+    fclose(fp);
     if ( (numchars<strlen("GET /\n"))||(strlen(buf)<strlen("GET /\n")) )
       {
         printf("<< Noise.\n");
