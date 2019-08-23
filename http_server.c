@@ -31,7 +31,7 @@ void handle_post_req(int);
 void resp_msg(int, char *, char *, char *);
 
 struct request{
-    int mask=0;
+    int mask;
     char method[8];
     char url[128];
     char data[128];
@@ -42,15 +42,9 @@ struct request parse_req(int client)
   {
     char buf[128],buf1[8];
     struct request rh;
-    int res=0, n=0, i, j;
+    rh.mask=0;
+    int n=0, i, j;
     n = get_line(client, buf, sizeof(buf));
-    if (!n || (strlen(buf)<strlen("GET /\n")))
-      {
-        printf("<< Noise.\n");
-        close(client);
-        shutdown(client,2);
-        return 0;
-      }
     i=0;
     while ( (i<strlen(buf)) && !ISspace(buf[i]) && (i<7))
       {
@@ -58,10 +52,10 @@ struct request parse_req(int client)
         i++;
       }
     rh.method[i] = '\0';
+    if(i>0)
+        rh.mask=rh.mask|1;
     while ((i<strlen(buf)) && ISspace(buf[i]))
-      {
         i++;
-      }
     j=0;
     while ( (i<strlen(buf)) && !ISspace(buf[i]) && (j<127))
       {
@@ -70,7 +64,8 @@ struct request parse_req(int client)
         j++;
       }
     rh.url[j] = '\0';
-
+    if(j>0)
+        rh.mask=rh.mask|2;
     while ((n > 0) && strcmp("\n", buf))
       {
         j=strlen(buf);
@@ -92,7 +87,8 @@ struct request parse_req(int client)
             if(strcmp(buf,"Content-Length")==0)
                {
                   rh.content_len=atoi(&(buf[i]));
-                  rh.mask=rh.mask|1;
+                  if(rh.content_len>0)
+                      rh.mask=rh.mask|4;
                }
           }
         n = get_line(client, buf, sizeof(buf));
