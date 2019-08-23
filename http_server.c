@@ -34,7 +34,7 @@ struct request{
     int mask;
     char method[8];
     char url[128];
-    char data[128];
+    char data[1024];
     int content_len;
 };
 
@@ -45,6 +45,7 @@ struct request parse_req(int client)
     rh.mask=0;
     int n=0, i, j;
     n = get_line(client, buf, sizeof(buf));
+    strcpy(rh.data,buf,strlen(buf));
     i=0;
     while ( (i<strlen(buf)) && !ISspace(buf[i]) && (i<7))
       {
@@ -69,6 +70,8 @@ struct request parse_req(int client)
     while ((n > 0) && strcmp("\n", buf))
       {
         j=strlen(buf);
+        if(j+strlen(rh.data)<1024)
+            strcpy(rh.data+strlen(rh.data),buf,j);
         i=0;
         while((i<j)&&(buf[i]!=':'))
             i++;
@@ -114,7 +117,11 @@ void accept_request(int client)
     int cgi = 0, par_k_cur = -1, par_v_cur = -1, par_cur = -1, cgi_arg_cur = 0;
     char *query_string = NULL;
     const char *server_root="./htdocs/";
-
+//======================================================
+    struct req=parse_req(client);
+    resp_msg(client, "200 ok", "echo", req.data);
+    return;
+//======================================================
     memset(parm,'\0', 2*32*sizeof(char) );
 
     // First line, the string before the first space, identifys the method of the request
