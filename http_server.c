@@ -40,6 +40,12 @@ struct request{
     int content_len;
 };
 
+struct req_args{
+    int len;
+    char keys[16][32];
+    char values[16][32];
+};
+
 struct request parse_req(int client)
   {
     char buf[128],buf1[8];
@@ -48,7 +54,7 @@ struct request parse_req(int client)
     int n=0, i, j;
     n = get_line(client, buf, sizeof(buf));
     //memcpy(rh.data,buf,strlen(buf));
-    rh.data="wwwwwwwwwwwwww\n\0";
+    strcpy(rh.data,"wwwwwwwwwwwwww\n\0");
     i=0;
     while ( (i<strlen(buf)) && !ISspace(buf[i]) && (i<7))
       {
@@ -102,6 +108,67 @@ struct request parse_req(int client)
     return rh;
   }
 
+struct req_args parse_url(char *url)
+{
+    int i = 0, n = strlen(url)-2, cur0;
+    struct req_args res;
+    res.len=0;
+    memset(res.keys,'\0',16*32*sizeof(char));
+    memset(res.values,'\0',16*32*sizeof(char));
+    if(strlen(url)>(2*16*32))
+    {
+        res.len=-1;
+        return res;   //Exception: arg is too long or without end character '\0'.
+    }
+    while ((ISspace(buf[i]) && (i < strlen(url)))
+        i++;
+    while ( (n>=i) && (ISspace(url[n])) )
+        n--;
+    if (n < i) // no none-space character found in url
+        return res;
+    else
+        url[n+1]='\0';
+
+    cur0 = i;
+    while (i<=n)
+    {
+        if ( ((i-cur0+1)>32)||(res.len>16) ) // Exception: length of k/v excceeds array size 16*31
+        {
+            res.len=-1;
+            return res;
+        }
+        if ( (url[i]=='?') && (res.len == 0) )
+        {
+            url[i] = '\0';
+            strcpy(res.keys[0],"path\0");
+            strcpy(res.values[0],url+cur0);
+            cur0=i+1;
+            res.len++;
+        }
+        else if ( (url[i]=='=') && (res.keys[res.len][0]=='\0') && (res.values[res.len][0]=='\0')  )
+        {
+            url[i] = '\0';
+            strcpy(res.keys[res.len],url+cur0);
+            cur0=i+1;            
+        }
+        else if ( (url[i]=='&') && (res.keys[res.len][0]!='\0') && (res.values[res.len][0]=='\0') )
+        {
+            url[i] = '\0';
+            strcpy(res.values[res.len],url+cur0);
+            cur0=i+1;
+            res.len++;
+        }
+        else if (i==n)
+        {
+            if ( (res.keys[res.len][0]!='\0') && (res.values[res.len][0]=='\0') )
+                strcpy(res.values[res.len],url+cur0);
+            if ( (res.values[res.len][0]=='\0') || (res.keys[res.len][0]=='\0') )
+                res.len--;
+        }
+        i++;
+    }
+    return res;
+}
 /**********************************************************************/
 /* A request has caused a call to accept() on the server port to
  * return.  Process the request appropriately.
