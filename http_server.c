@@ -53,8 +53,6 @@ struct request parse_req(int client)
     rh.mask=0;
     int n=0, i, j;
     n = get_line(client, buf, sizeof(buf));
-    //memcpy(rh.data,buf,strlen(buf));
-    strcpy(rh.data,"wwwwwwwwwwwwww\n\0");
     i=0;
     while ( (i<strlen(buf)) && !ISspace(buf[i]) && (i<7))
       {
@@ -78,14 +76,18 @@ struct request parse_req(int client)
         rh.mask=rh.mask|2;
     while ((n > 0) && strcmp("\n", buf))
       {
+        printf("< %s",buf);
         j=strlen(buf);
-        //if(j+strlen(rh.data)<1024)
-        //    memcpy(rh.data+strlen(rh.data),buf,j);
+        if(j+strlen(rh.data)<1024)
+            memcpy(rh.data+strlen(rh.data),buf,j);
         i=0;
         while((i<j)&&(buf[i]!=':'))
             i++;
         if(i>(j-2))
+          {
+            n = get_line(client, buf, sizeof(buf));
             continue;
+          }
         buf[i]='\0';
         i++;
         while((i<j)&&(ISspace(buf[i])))
@@ -188,9 +190,9 @@ void accept_request(int client)
     char *query_string = NULL;
     const char *server_root="./htdocs/";
 //======================================================
-//    struct request req=parse_req(client);
-//    resp_msg(client, "200 ok", "echo", req.data);
-//    return;
+    struct request req=parse_req(client);
+    resp_msg(client, "200 ok", "echo", req.data);
+    return;
 //======================================================
     memset(parm,'\0', 2*32*sizeof(char) );
 
@@ -687,7 +689,7 @@ void resp_msg(int client, char *status, char *title, char *msg)
     else
         strcat(buf,msg);
 
-    strcat(buf, "</BODY></HTML>\r\n");
+    strcat(buf, "</P></BODY></HTML>\r\n");
     sprintf(buf_cl, "Content-Length: %ld\r\n\r\n", strlen(buf));
     send(client, buf_cl, strlen(buf_cl), 0);
     send(client, buf, strlen(buf), 0);
