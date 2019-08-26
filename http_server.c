@@ -120,7 +120,7 @@ struct req_args parse_url(char *url)
         res.len=-1;
         return res;   //Exception: arg is too long or without end character '\0'.
     }
-    while ((ISspace(buf[i]) && (i < strlen(url)))
+    while ((ISspace(url[i])) && (i < strlen(url)))
         i++;
     while ( (n>=i) && (ISspace(url[n])) )
         n--;
