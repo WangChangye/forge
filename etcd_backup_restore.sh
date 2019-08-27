@@ -39,6 +39,9 @@ restore()
     fi
     cp -rf ${backup_root}/${latest_backup}/member ${data_dir}/
     chown -R ${dir_owner} ${data_dir}/member
+
+    exit 0
+
     docker pull registry.local/google_containers/etcd-amd64:3.1.10 >/dev/null 2>&1
     docker inspect registry.local/google_containers/etcd-amd64:3.1.10 >/dev/null 2>&1
     if [ $? -eq 0 ];then

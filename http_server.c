@@ -16,6 +16,10 @@
 #define SERVER_STRING "Server: fnt_httpd/0.1.0\r\n"
 #define REQ_PAR_ACTION 0
 #define REQ_PAR_ID 1
+#define REQ_MASK_FLAG_METHOD_IS_SET 1
+#define REQ_MASK_FLAG_CONTENT_LEN_IS_SET 2
+#define REQ_MASK_FLAG_PARM_C_IS_SET 4
+#define REQ_MASK_FLAG_DATA_IS_SET 8
 
 void discard_headers(int);
 void accept_request(int);
@@ -35,15 +39,13 @@ FILE *fp;
 struct request{
     int mask;
     char method[8];
-    char url[128];
-    char data[1024];
+    char url[256];
     int content_len;
-};
-
-struct req_args{
-    int len;
-    char keys[16][32];
-    char values[16][32];
+    int parm_c;
+    char parm_k[16][32];
+    char parm_v[16][32];
+    char data[1024];
+    char raw_req[1024];
 };
 
 struct request parse_req(int client)
@@ -51,6 +53,7 @@ struct request parse_req(int client)
     char buf[128],buf1[8];
     struct request rh;
     rh.mask=0;
+    memset(rh.data,'\0', sizeof(rh.data));
     int n=0, i, j;
     n = get_line(client, buf, sizeof(buf));
     i=0;
@@ -61,7 +64,7 @@ struct request parse_req(int client)
       }
     rh.method[i] = '\0';
     if(i>0)
-        rh.mask=rh.mask|1;
+        rh.mask=rh.mask|REQ_MASK_FLAG_METHOD_IS_SET;
     while ((i<strlen(buf)) && ISspace(buf[i]))
         i++;
     j=0;
@@ -73,13 +76,20 @@ struct request parse_req(int client)
       }
     rh.url[j] = '\0';
     if(j>0)
+    {
         rh.mask=rh.mask|2;
-    while ((n > 0) && strcmp("\n", buf))
+        if ( parse_url(&(rh.parm_c), rh.parm_k, rh.parm_v, rh.url) > 0)
+        {
+            rh.mask=rh.mask|REQ_MASK_FLAG_PARM_C_IS_SET;
+        }
+    }
+    //while ((n > 0) && strcmp("\n", buf))
+    while(n>0)
       {
         printf("< %s",buf);
         j=strlen(buf);
-        if(j+strlen(rh.data)<1024)
-            memcpy(rh.data+strlen(rh.data),buf,j);
+        if(j+strlen(rh.raw_req)<1024)
+            memcpy(rh.raw_req+strlen(rh.raw_req),buf,j);
         i=0;
         while((i<j)&&(buf[i]!=':'))
             i++;
@@ -100,76 +110,91 @@ struct request parse_req(int client)
             buf[i]='\0';
             if(strcmp(buf,"Content-Length")==0)
                {
-                  rh.content_len=atoi(&(buf[i]));
+                  rh.content_len=atoi(buf+n);
                   if(rh.content_len>0)
-                      rh.mask=rh.mask|4;
+                      rh.mask=rh.mask|REQ_MASK_FLAG_CONTENT_LEN_IS_SET;
                }
           }
         n = get_line(client, buf, sizeof(buf));
       }
+
+    printf("content-length:%d\n",rh.content_len);
+    n = get_line(client, buf, sizeof(buf));
+    printf("wwww data:%s\n", buf);
+    while ((n > 0) && (strlen(rh.data)<=rh.content_len) )
+    {
+        j=strlen(buf);
+        if(j+strlen(rh.data)<1024)
+            memcpy(rh.raw_req+strlen(rh.raw_req),buf,j);
+        n = get_line(client, buf, sizeof(buf));
+    }
+    if (rh.data[0]!='\0')
+        rh.mask=rh.mask|REQ_MASK_FLAG_DATA_IS_SET;
     return rh;
   }
 
-struct req_args parse_url(char *url)
+int parse_url(int *c, char k[][32], char v[][32], char *url)
 {
-    int i = 0, n = strlen(url)-2, cur0;
-    struct req_args res;
-    res.len=0;
-    memset(res.keys,'\0',16*32*sizeof(char));
-    memset(res.values,'\0',16*32*sizeof(char));
+    int i = 0, n = strlen(url)-1, cur0;
+    *c=0;
+    memset(k,'\0',sizeof(k));
+    memset(v,'\0',sizeof(v));
     if(strlen(url)>(2*16*32))
     {
-        res.len=-1;
-        return res;   //Exception: arg is too long or without end character '\0'.
+        return -1;   //Exception: arg is too long or without end character '\0'.
     }
     while ((ISspace(url[i])) && (i < strlen(url)))
         i++;
     while ( (n>=i) && (ISspace(url[n])) )
         n--;
     if (n < i) // no none-space character found in url
-        return res;
+        return 0;
     else
         url[n+1]='\0';
 
     cur0 = i;
     while (i<=n)
     {
-        if ( ((i-cur0+1)>32)||(res.len>16) ) // Exception: length of k/v excceeds array size 16*31
+        if ( ((i-cur0+1)>32)||(*c>16) ) // Exception: length of k/v excceeds array size 16*31
         {
-            res.len=-1;
-            return res;
+            return -1;
         }
-        if ( (url[i]=='?') && (res.len == 0) )
+        if ( (url[i]=='?') && (*c == 0) )
         {
             url[i] = '\0';
-            strcpy(res.keys[0],"path\0");
-            strcpy(res.values[0],url+cur0);
+            strcpy(k[0],"path\0");
+            strcpy(v[0],url+cur0);
             cur0=i+1;
-            res.len++;
+            *c = (*c)+1;
         }
-        else if ( (url[i]=='=') && (res.keys[res.len][0]=='\0') && (res.values[res.len][0]=='\0')  )
+        else if ( (url[i]=='=') && (k[*c][0]=='\0') && (v[*c][0]=='\0')  )
         {
             url[i] = '\0';
-            strcpy(res.keys[res.len],url+cur0);
+            strcpy(k[*c],url+cur0);
             cur0=i+1;            
         }
-        else if ( (url[i]=='&') && (res.keys[res.len][0]!='\0') && (res.values[res.len][0]=='\0') )
+        else if ( (url[i]=='&') && (k[*c][0]!='\0') && (v[*c][0]=='\0') )
         {
             url[i] = '\0';
-            strcpy(res.values[res.len],url+cur0);
+            strcpy(v[*c],url+cur0);
             cur0=i+1;
-            res.len++;
+            *c = *c+1;
         }
         else if (i==n)
         {
-            if ( (res.keys[res.len][0]!='\0') && (res.values[res.len][0]=='\0') )
-                strcpy(res.values[res.len],url+cur0);
-            if ( (res.values[res.len][0]=='\0') || (res.keys[res.len][0]=='\0') )
-                res.len--;
+            if ( (*c == 0) && (k[*c][0]=='\0') && (v[*c][0]=='\0') )
+            {
+                strcpy(k[0],"path\0");
+                strcpy(v[0],url+cur0);
+            }
+            else if ( (k[*c][0]!='\0') && (v[*c][0]=='\0') )
+                strcpy(v[*c],url+cur0);
+            else if ( ( (v[*c][0]=='\0') || (k[*c][0]=='\0') )&&(*c>0) )
+                *c = (*c)-1;
         }
         i++;
     }
-    return res;
+    return *c;
 }
 /**********************************************************************/
 /* A request has caused a call to accept() on the server port to
@@ -191,7 +216,8 @@ void accept_request(int client)
     const char *server_root="./htdocs/";
 //======================================================
     struct request req=parse_req(client);
-    resp_msg(client, "200 ok", "echo", req.data);
+    resp_msg(client, "200 ok", "echo", req.raw_req);
+    printf("rh.parm_c:%d, req.k[0]:%s, req.v[0]:%s, data:%s\n",req.parm_c, req.parm_k[0], req.parm_v[0],req.data);
     return;
 //======================================================
     memset(parm,'\0', 2*32*sizeof(char) );
