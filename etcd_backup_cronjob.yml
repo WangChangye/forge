@@ -16,8 +16,8 @@ spec:
             securityContext:
               privileged: true
             volumeMounts:
-            - mountPath: /var/lib/etcd
-              name: etcd-bkp
+            - mountPath: /var/lib
+              name: varlib
             - mountPath: /etc/kubernetes
               name: etcd-certs
             - mountPath: /etc/systemd/system
@@ -29,9 +29,9 @@ spec:
               type: DirectoryOrCreate
             name: etcd-certs
           - hostPath:
-              path: /var/lib/k8s_etcd_backup
+              path: /var/lib
               type: DirectoryOrCreate
-            name: etcd-bkp
+            name: varlib
           - hostPath:
               path: /etc/systemd/system
               type: DirectoryOrCreate
