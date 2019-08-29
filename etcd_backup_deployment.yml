@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: etcd-backup
+  namespace: default
+  labels:
+    k8s-app: etcd-backup
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: etcd-backup-po
+  template:
+    metadata:
+      labels:
+        name: etcd-backup-po
+    spec:
+      containers:
+      - name: etcd
+        image: areseary/etcdctl:3.3.15.5
+        volumeMounts:
+        - mountPath: /var/lib
+          name: varlib
+        - mountPath: /etc/kubernetes
+          name: etcd-certs
+        - mountPath: /etc/systemd/system
+          name: systemd-dir
+      hostNetwork: true
+      volumes:
+      - hostPath:
+          path: /etc/kubernetes
+          type: DirectoryOrCreate
+        name: etcd-certs
+      - hostPath:
+          path: /var/lib
+          type: DirectoryOrCreate
+        name: varlib
+      - hostPath:
+          path: /etc/systemd/system
+          type: DirectoryOrCreate
+        name: systemd-dir
+      restartPolicy: Always
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Equal"
+        value: ""
+        effect: "NoSchedule"
+      - key: "cloudtogo.cn/role"
+        operator: "Equal"
+        value: "storage"
+        effect: "NoSchedule"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: Exists
+            - matchExpressions:
+              - key: kubernetes.io/role
+                operator: In
+                values:
+                - master

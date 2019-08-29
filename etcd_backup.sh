@@ -31,7 +31,7 @@ fi
 
 polit_v=`date +%s`
 ${cmd} put "/fnt/polit" "${polit_v}"
-tvar=X`ETCDCTL_API=3 /etcdctl --endpoints="http://127.0.0.1:2379" get "/fnt/polit"|awk 'NR==2{print $1}'`
+tvar=X`ETCDCTL_API=3 ${cmd} get "/fnt/polit" --print-value-only | awk 'NR==1{print$1}'`
 if [ ! -d /var/lib/k8s_etcd_backup ];then
     mkdir -p /var/lib/k8s_etcd_backup
 fi
