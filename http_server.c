@@ -14,12 +14,6 @@
 
 #define ISspace(x) isspace((int)(x))
 #define SERVER_STRING "Server: fnt_httpd/0.1.0\r\n"
-#define REQ_PAR_ACTION 0
-#define REQ_PAR_ID 1
-#define REQ_MASK_FLAG_METHOD_IS_SET 1
-#define REQ_MASK_FLAG_CONTENT_LEN_IS_SET 2
-#define REQ_MASK_FLAG_PARM_C_IS_SET 4
-#define REQ_MASK_FLAG_DATA_IS_SET 8
 
 void discard_headers(int);
 void accept_request(int);
@@ -33,11 +27,11 @@ void serve_file(int, const char *);
 int startup(u_short *);
 void handle_post_req(int);
 void resp_msg(int, char *, char *, char *);
+int parse_url(int *, int, char [][32], char [][32], char *);
 
 FILE *fp;
 
 struct request{
-    int mask;
     char method[8];
     char url[256];
     int content_len;
@@ -50,11 +44,11 @@ struct request{
 
 struct request parse_req(int client)
   {
+    int n=0, i, j;
     char buf[128],buf1[8];
     struct request rh;
-    rh.mask=0;
+    rh.content_len = -1;
     memset(rh.data,'\0', sizeof(rh.data));
-    int n=0, i, j;
     n = get_line(client, buf, sizeof(buf));
     i=0;
     while ( (i<strlen(buf)) && !ISspace(buf[i]) && (i<7))
@@ -63,8 +57,7 @@ struct request parse_req(int client)
         i++;
       }
     rh.method[i] = '\0';
-    if(i>0)
-        rh.mask=rh.mask|REQ_MASK_FLAG_METHOD_IS_SET;
+
     while ((i<strlen(buf)) && ISspace(buf[i]))
         i++;
     j=0;
@@ -75,18 +68,10 @@ struct request parse_req(int client)
         j++;
       }
     rh.url[j] = '\0';
-    if(j>0)
-    {
-        rh.mask=rh.mask|2;
-        if ( parse_url(&(rh.parm_c), rh.parm_k, rh.parm_v, rh.url) > 0)
-        {
-            rh.mask=rh.mask|REQ_MASK_FLAG_PARM_C_IS_SET;
-        }
-    }
-    //while ((n > 0) && strcmp("\n", buf))
-    while(n>0)
+    parse_url(&(rh.parm_c), 16, rh.parm_k, rh.parm_v, rh.url);
+    while ((n > 0) && strcmp("\n", buf))
       {
-        printf("< %s",buf);
+        printf("< %s", buf);
         j=strlen(buf);
         if(j+strlen(rh.raw_req)<1024)
             memcpy(rh.raw_req+strlen(rh.raw_req),buf,j);
@@ -109,36 +94,29 @@ struct request parse_req(int client)
           {
             buf[i]='\0';
             if(strcmp(buf,"Content-Length")==0)
-               {
-                  rh.content_len=atoi(buf+n);
-                  if(rh.content_len>0)
-                      rh.mask=rh.mask|REQ_MASK_FLAG_CONTENT_LEN_IS_SET;
-               }
+                rh.content_len=atoi(buf+n);
           }
         n = get_line(client, buf, sizeof(buf));
       }
 
-    printf("content-length:%d\n",rh.content_len);
-    n = get_line(client, buf, sizeof(buf));
-    printf("wwww data:%s\n", buf);
-    while ((n > 0) && (strlen(rh.data)<=rh.content_len) )
+    i = 0;
+    while( (i < rh.content_len) && (i < 1023) )
     {
-        j=strlen(buf);
-        if(j+strlen(rh.data)<1024)
-            memcpy(rh.raw_req+strlen(rh.raw_req),buf,j);
-        n = get_line(client, buf, sizeof(buf));
+        recv(client, rh.data+i, 1, 0);
+        i++;
     }
-    if (rh.data[0]!='\0')
-        rh.mask=rh.mask|REQ_MASK_FLAG_DATA_IS_SET;
+    rh.data[i] == '\0';
+    printf("< DATA: %s\n", rh.data);
     return rh;
   }
 
-int parse_url(int *c, char k[][32], char v[][32], char *url)
+// cnt_limit: the first dimenion size of k[][32] 
+int parse_url(int *c, int cnt_limit, char k[][32], char v[][32], char *url)
 {
     int i = 0, n = strlen(url)-1, cur0;
     *c=0;
-    memset(k,'\0',sizeof(k));
-    memset(v,'\0',sizeof(v));
+    memset(k,'\0',cnt_limit*32*sizeof(char));
+    memset(v,'\0',cnt_limit*32*sizeof(char));
     if(strlen(url)>(2*16*32))
     {
         return -1;   //Exception: arg is too long or without end character '\0'.
@@ -155,42 +133,59 @@ int parse_url(int *c, char k[][32], char v[][32], char *url)
     cur0 = i;
     while (i<=n)
     {
-        if ( ((i-cur0+1)>32)||(*c>16) ) // Exception: length of k/v excceeds array size 16*31
+        if ( ((i-cur0+1)>32)||(*c>16) ) // Exception: length of k or v excceeds array size 16*31
         {
             return -1;
         }
-        if ( (url[i]=='?') && (*c == 0) )
+        if (*c == 0)
         {
-            url[i] = '\0';
-            strcpy(k[0],"path\0");
-            strcpy(v[0],url+cur0);
-            cur0=i+1;
-            *c = (*c)+1;
-        }
-        else if ( (url[i]=='=') && (k[*c][0]=='\0') && (v[*c][0]=='\0')  )
-        {
-            url[i] = '\0';
-            strcpy(k[*c],url+cur0);
-            cur0=i+1;            
-        }
-        else if ( (url[i]=='&') && (k[*c][0]!='\0') && (v[*c][0]=='\0') )
-        {
-            url[i] = '\0';
-            strcpy(v[*c],url+cur0);
-            cur0=i+1;
-            *c = *c+1;
-        }
-        else if (i==n)
-        {
-            if ( (*c == 0) && (k[*c][0]=='\0') && (v[*c][0]=='\0') )
+            if (i == n)
             {
+                url[i+1] = '\0';
                 strcpy(k[0],"path\0");
                 strcpy(v[0],url+cur0);
+                cur0=i+1;
+                *c = 1;
             }
-            else if ( (k[*c][0]!='\0') && (v[*c][0]=='\0') )
+            else if (url[i]=='?')
+            {
+                url[i] = '\0';
+                strcpy(k[0],"path\0");
+                strcpy(v[0],url+cur0);
+                cur0=i+1;
+                *c = 1;
+            }
+        }
+        else
+        {
+            if ( (url[i]=='=') && (k[*c][0]=='\0') && (v[*c][0]=='\0') )
+            {
+                url[i] = '\0';
+                strcpy(k[*c],url+cur0);
+                cur0=i+1;            
+            }
+            else if ( (url[i]=='&') && (k[*c][0]!='\0') && (v[*c][0]=='\0') )
+            {
+                url[i] = '\0';
                 strcpy(v[*c],url+cur0);
-            else if ( ( (v[*c][0]=='\0') || (k[*c][0]=='\0') )&&(*c>0) )
-                *c = (*c)-1;
+                cur0=i+1;
+                *c = *c+1;
+            }
+            if (i==n)
+            {
+                if ( (k[*c][0]!='\0') && (v[*c][0]=='\0') )
+                {
+                    strcpy(v[*c],url+cur0);
+                    *c = *c+1;
+                }
+                else if ( (v[*c][0]=='\0') || (k[*c][0]=='\0') )
+                {
+                    strcpy(k[*c],url+cur0);
+                    *c = *c+1;
+                }
+                if(v[*c-1][0]=='\0')
+                    strcpy(v[*c-1],"null\0");
+            }
         }
         i++;
     }
@@ -204,9 +199,7 @@ int parse_url(int *c, char k[][32], char v[][32], char *url)
 void accept_request(int client)
 {
     char buf[1024], buf_cl[32];
-    int numchars = 1;
-    char method[8];
-    char url[255];
+    int cur;
     char path[512];
     char parm[2][32], parm_buf[32], *cgi_args[8];
     size_t i, j;
@@ -214,152 +207,56 @@ void accept_request(int client)
     int cgi = 0, par_k_cur = -1, par_v_cur = -1, par_cur = -1, cgi_arg_cur = 0;
     char *query_string = NULL;
     const char *server_root="./htdocs/";
-//======================================================
     struct request req=parse_req(client);
-    resp_msg(client, "200 ok", "echo", req.raw_req);
-    printf("rh.parm_c:%d, req.k[0]:%s, req.v[0]:%s, data:%s\n",req.parm_c, req.parm_k[0], req.parm_v[0],req.data);
-    return;
-//======================================================
-    memset(parm,'\0', 2*32*sizeof(char) );
-
-    // First line, the string before the first space, identifys the method of the request
-    numchars = get_line(client, buf, sizeof(buf));
-    fp=fopen("fnt.log","at+");
-    fputs(buf,fp);
-    fclose(fp);
-    if ( (numchars<strlen("GET /\n"))||(strlen(buf)<strlen("GET /\n")) )
+    int m;
+    for(m=0; m < req.parm_c; m++)
+        printf("c:%d, key:%s, value:%s, data:%s\n",req.parm_c, req.parm_k[m], req.parm_v[m],req.data);
+    if (strcasecmp(req.method, "GET") && strcasecmp(req.method, "POST"))
       {
-        printf("<< Noise.\n");
+        printf("! Unimplemented method: %s\n", req.method);
+        sprintf(buf, "Unsupported method: %s", req.method);
+        resp_msg(client, "501 Unimplemented method", "501 error", buf);
+        return;
+      }
+    if (req.parm_v[0][strlen(req.parm_v[0]) - 1] == '/')
+        sprintf(path, "htdocs%sindex.html", req.parm_v[0]);
+    else
+        strcpy(path, req.parm_v[0]);
+
+    if (stat(path, &st) == -1)
+      {
+        not_found(client);
+        return;
+      }
+
+    if ((st.st_mode & S_IFMT) == S_IFDIR)
+          strcat(path, "/index.html");
+
+    if (stat(path, &st) == -1)
+        not_found(client);
+    if ((st.st_mode&S_IFMT)==S_IFREG && (st.st_mode&S_IRUSR)>0)
+      {
+        serve_file(client, path);
         close(client);
-        shutdown(client,2);
+        shutdown(client, 2);
         return;
       }
-    printf("=================================================================\n< %s", buf);
-
-    i = 0; j = 0;
-    while (!ISspace(buf[j]) && (i < sizeof(method) - 1) && (j < strlen(buf)))
-    {
-        method[i] = buf[j];
-        i++; j++;
-    }
-    method[i] = '\0';
-
-    if (strcasecmp(method, "GET") && strcasecmp(method, "POST"))
+/*
+    if (( !strcmp("/cgi.do", req.parm_v[0]) ) && strcasecmp(req.method, "GET")==0 )
       {
-        printf("! Unimplemented method: %s\n", method);
-        discard_headers(client);
-        resp_msg(client, "501 Unimplemented method", "501 error", "501 error<br>Bad Request");
+        buf_cl[0]='\0';
+        cur = 0;
+        while(strcmp(req.parm_k[cur],"action") && (cur < req.parm_c))
+        {
+            cur++;
+        }
+        if((cur>0)&&(cur<req.parm_c))
+            execute_cgi(client, req.parm_v[cur], cgi_args, req.method, query_string);
+        else
+            execute_cgi(client, "ls", NULL, req.method, query_string);
         return;
       }
-
-    while (ISspace(buf[j]) && (j < strlen(buf)))
-        j++;
-
-    i = 0;
-    while (!ISspace(buf[j]) && (i < sizeof(url) - 1) && (j < strlen(buf)))
-    {
-        if((buf[j] == '?') && (par_k_cur == -1) && (par_v_cur == -1))
-          {
-            memset(parm_buf, '\0', sizeof(parm_buf));
-            par_k_cur = 0;
-          }
-        else if((buf[j] == '&') && ( par_k_cur == -1 ))
-          {
-            if ( (par_v_cur > -1) && (cgi_arg_cur > 0) && (par_cur < 0) && (strlen(parm_buf) > 0) )
-              {
-                cgi_args[cgi_arg_cur] = (char*)malloc(strlen(parm_buf));
-                if (cgi_args[cgi_arg_cur] == NULL)
-                  {
-                    printf("! Failed_to_request_mem.\n");
-                    discard_headers(client);
-                    resp_msg(client, "501 Internal Error", "501 error", "501 error<br>The server seems in trouble now, please try again latter.");
-                    return;
-                  }
-                strcpy(cgi_args[cgi_arg_cur], parm_buf);
-              }
-            memset(parm_buf, '\0', sizeof(parm_buf));
-            par_k_cur = 0;
-            par_v_cur = -1;
-          }
-        else if((buf[j] == '=') && (par_k_cur > -1) && ( par_v_cur == -1 ))
-          {
-            par_k_cur = -1;
-            par_v_cur = 0;
-            if (strcmp(parm_buf, "action") == 0 )
-                 par_cur = REQ_PAR_ACTION;
-            else if(strcmp(parm_buf, "id") == 0)
-                 par_cur = REQ_PAR_ID;
-            else if (strcmp(parm_buf, "carg") == 0)
-              {
-                cgi_arg_cur++;
-                par_v_cur = 0;
-                par_cur = -1;
-                memset(parm_buf, '\0', sizeof(parm_buf));
-              }
-            else
-              {
-                 par_cur = -1;
-              }
-          }
-        else if((par_k_cur > -1) && (par_k_cur < sizeof(parm_buf) - 1))
-          {
-            parm_buf[par_k_cur] = buf[j];
-            par_k_cur++;
-          }
-        else if((par_v_cur > -1) && (par_cur > -1) && (par_v_cur < sizeof(parm[par_cur]) - 1))
-          {
-            parm[par_cur][par_v_cur] = buf[j];
-            par_v_cur++;
-          }
-        else if((par_v_cur > -1) && (cgi_arg_cur > 0) && (par_cur < 0) && (par_v_cur < sizeof(parm_buf) - 1))
-          {
-            parm_buf[par_v_cur] = buf[j];
-            par_v_cur++;
-          }
-
-        url[i] = buf[j];
-        i++; j++;
-    }
-
-    if ( (par_v_cur > -1) && (cgi_arg_cur > -1) && (par_cur < 0) && (strlen(parm_buf) > 0) )
-      {
-        cgi_args[cgi_arg_cur] = (char*)malloc(strlen(parm_buf));
-        strcpy(cgi_args[cgi_arg_cur], parm_buf);
-      }
-    //cgi_args[++cgi_arg_cur] = (char*)malloc();
-    cgi_args[++cgi_arg_cur] = (char*)0;
-
-    url[i] = '\0';
-    query_string = url;
-    while ((*query_string != '?') && (*query_string != '\0'))
-        query_string++;
-    if (*query_string == '?')
-      {
-        *query_string = '\0';
-        query_string++;
-      }
-
-    sprintf(path, "htdocs%s", url);
-    if (path[strlen(path) - 1] == '/')
-        strcat(path, "index.html");
-
-    cgi_args[0] = (char*)malloc(strlen(parm[REQ_PAR_ACTION]));
-    strcpy(cgi_args[0], parm[REQ_PAR_ACTION]);
-    printf("# url: %s, par0: %s, path: %s\n", url, parm[0], path);
-    for (par_v_cur=0; par_v_cur<cgi_arg_cur-1; par_v_cur++)
-        printf("# cgi_arg: %s, par_v_cur:%d/%d\n", cgi_args[par_v_cur], par_v_cur, cgi_arg_cur-1);
-  
-    if (( !strcmp("/cgi.do", url) ) && strcasecmp(method, "GET")==0 )
-      {
-        execute_cgi(client, parm[REQ_PAR_ACTION], cgi_args, method, query_string);
-        for (par_v_cur=0; par_v_cur< cgi_arg_cur; par_v_cur++)
-          {
-            free(cgi_args[par_v_cur]);
-            cgi_args[par_v_cur] = (char*)0;
-          }
-        return;
-      }
-    else if (( !strcmp("/update_svc.do", url) ) && strcasecmp(method, "POST")==0)
+    else if (( !strcmp("/update_svc.do", req.parm_v[0]) ) && strcasecmp(req.method, "POST")==0)
       {
         handle_post_req(client);
         return;
@@ -395,7 +292,7 @@ void accept_request(int client)
           return;
         }
     }
-
+*/
     close(client);
     shutdown(client, 2);
 }
@@ -467,45 +364,7 @@ void execute_cgi(int client, const char *path, char* const *args, const char *me
     int content_length = -1, content_counter = 0;
 
     buf[0] = 'A'; buf[1] = '\0';
-    if (strcasecmp(method, "GET") == 0)
-        printf("# execute_cgi, get\n");
-    else
-    {
-        numchars = get_line(client, buf, sizeof(buf));
-        while ((numchars > 0) && strcmp("\n", buf))
-          {
-            printf("< %s\n", buf);
-            buf[15] = '\0';
-            if (strcasecmp(buf, "Content-Length:") == 0)
-              { 
-                content_length = atoi(&(buf[16]));
-                printf("# content_length_of_request: %d\n", content_length);
-              }
-            numchars = get_line(client, buf, sizeof(buf));
-          }
-        discard_headers(client);
-        if (content_length == -1)
-          {
-            bad_request(client);
-            return;
-          }
 
-        for (i = 0; i < content_length && i < sizeof(buf)-2; i++)
-             recv(client, buf+i, 1, 0);
-
-        if (content_length <= sizeof(buf)-1)
-            buf[content_length]='\0';
-        else
-          {
-            buf[sizeof(buf)-1]='\0';
-            buf[sizeof(buf)-2]='.';
-            buf[sizeof(buf)-3]='.';
-            buf[sizeof(buf)-4]='.';
-          }
-
-        printf("# post data: %s\n", buf);
-
-    }
     sprintf(buf, "HTTP/1.0 200 OK\r\n");
     send(client, buf, strlen(buf), 0);
 
@@ -608,7 +467,6 @@ void serve_file(int client, const char *filename)
     int numchars = 1;
     char buf[256];
 
-    discard_headers(client);
     resource = fopen(filename, "r");
     if (resource == NULL)
         not_found(client);
@@ -731,7 +589,7 @@ void handle_post_req(int client)
     
     buf[0] = 'A'; buf[1] = '\0';
     numchars = get_line(client, buf, sizeof(buf));
-    while ((numchars > 0) && strcmp("\n", buf) && (status<32))
+    while ((numchars > 0) && strcmp("\n", buf))
       {
         printf("< %s", buf);
         numchars = strlen(buf);
