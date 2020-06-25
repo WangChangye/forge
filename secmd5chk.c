@@ -25,7 +25,7 @@
 // char, we keep a int value to identify if the recorded checksum need to be refreshed.
 int run_chk(char *path, char *previous_checksum)
 {
-	 char buf[1024], buf1[128];
+	 char buf[512], buf1[64];
 	 struct stat st;
      FILE *f=NULL;
      int i=0, j, fd, r, flag = 0, res = -1;
@@ -48,7 +48,6 @@ int run_chk(char *path, char *previous_checksum)
 		 {
 			 previous_checksum[33]=0;
 			 strcpy(path, "not found");
-			 //printf("Warning: file %s monitored by secmd5chk is missing.\n",path);
 		     return 1;
 		 }
 	 }
@@ -64,7 +63,7 @@ int run_chk(char *path, char *previous_checksum)
          f=popen(buf, "r");
 	     fd=fileno(f);
          j = 0;
-         while(((r=read(fd, buf, sizeof(buf)))>0)&&(res<0))
+         while(((r=read(fd, buf, sizeof(buf)))>0)&&(res != 32))
          {
              buf[r]='\0';
              i = 0;
@@ -73,24 +72,29 @@ int run_chk(char *path, char *previous_checksum)
 			     // we find one new line
 			     if((buf[i]=='\r')||(buf[i]=='\n'))
 			     {
-				     flag = 0;
-				     if((j>0)&&(j<sizeof(buf1)))
+				     if((j==32)&&(j<sizeof(buf1)))
+					 {
+						 //printf("detected md5 value: %s\n", buf1);
 					     buf1[j] = '\0';
-				     j = 0;
-				     if(strlen(buf1)>0)
-				     {
-					     //printf("detected md5 value: %s\n", buf1);
+						 res=32;
                          break;
 				     }
+					 else
+					 {
+						 j=0;
+						 flag=0;
+						 memset(buf1, '\0', sizeof(buf1));
+					 }
 			     }
-			     else if(!flag)
+			     else if(flag==0)
 			     {
-				     // strlenof(md5 value) is 32, and is composed of lowercase letters a-z and numbers 0-9
-				     // we drop the current line if it's too long or contains invalid characters
-				     if((j>127)||(((buf[i]<'0')||(buf[i]>'9'))&&((buf[i]<'a')||(buf[i]>'z')) && !isspace(buf[i])))
+				     // strlenof(md5 value) is 32, and is composed of lowercase letters a-z and numbers 0-9, and may contains some spaces
+				     // we drop the current line if it's too long( longer than 64 characters) or contains invalid characters
+				     if((j>63)||(((buf[i]<'0')||(buf[i]>'9'))&&((buf[i]<'a')||(buf[i]>'z')) && !isspace(buf[i])))
 				     {
+						 j=0;
 					     flag = 1;
-					     buf1[0] = '\0';
+					     memset(buf1, '\0', sizeof(buf1));
 				     }
 				     else
 				     {
