@@ -1,0 +1,23 @@
+# HELP kube_cert_validity_days The remained period of validity for the kube certs.
+# TYPE kube_cert_validity_days gauge
+kube_cert_validity_days{cert_filename="/root/.minikube/profiles/minikube/proxy-client.crt",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/.minikube/profiles/minikube/client.crt",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/.minikube/profiles/minikube/apiserver.crt",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/.minikube/profiles/minikube/apiserver.crt.e8f7677d",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/.minikube/ca.crt",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/.minikube/certs/cert.pem",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/.minikube/certs/ca.pem",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/.minikube/proxy-client.crt",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/.minikube/proxy-client-ca.crt",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/.minikube/client.crt",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/.minikube/apiserver.crt",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/k8s_setup/ssl_forge/etcd.pem",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/k8s_setup/ssl_forge/kube-controller-manager.pem",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/k8s_setup/ssl_forge/kubectl.pem",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/k8s_setup/ssl_forge/proxy-client.pem",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/k8s_setup/ssl_forge/kube-apiserver.pem",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/k8s_setup/ssl_forge/kube-scheduler.pem",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+kube_cert_validity_days{cert_filename="/root/k8s_setup/ssl_forge/ca.pem",expiry_str="Oct 19 08:23:00 2120 GMT"} 36436
+# HELP fs_usage_percent The usage of filesystem.
+# TYPE fs_usage_percent gauge
+fs_usage_percent{Mounted="/"} 32

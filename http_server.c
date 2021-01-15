@@ -23,7 +23,7 @@ void cannot_execute(int);
 void error_die(const char *);
 void execute_cgi(int, const char *, char * const*, const char *, const char *);
 void not_found(int);
-void serve_file(int, const char *);
+void serve_file(int, const char *, char[]);
 int startup(u_short *);
 void handle_post_req(int);
 void resp_msg(int, char *, char *, char *);
@@ -39,6 +39,7 @@ struct request{
     char parm_k[16][32];
     char parm_v[16][32];
     char data[1024];
+    char useragent[64];
     char raw_req[1024];
 };
 
@@ -95,6 +96,10 @@ struct request parse_req(int client)
             buf[i]='\0';
             if(strcmp(buf,"Content-Length")==0)
                 rh.content_len=atoi(buf+n);
+            else if(strcmp(buf,"User-Agent")==0)
+              {
+                strcpy(rh.useragent,buf+n);
+              }
           }
         n = get_line(client, buf, sizeof(buf));
       }
@@ -210,7 +215,7 @@ void accept_request(int client)
     struct request req=parse_req(client);
     int m;
     for(m=0; m < req.parm_c; m++)
-        printf("c:%d, key:%s, value:%s, data:%s\n",req.parm_c, req.parm_k[m], req.parm_v[m],req.data);
+        printf("c:%d, key:%s, value:%s, UA: %s, data:%s\n",req.parm_c, req.parm_k[m], req.parm_v[m],req.useragent,req.data);
     if (strcasecmp(req.method, "GET") && strcasecmp(req.method, "POST"))
       {
         printf("! Unimplemented method: %s\n", req.method);
@@ -218,10 +223,20 @@ void accept_request(int client)
         resp_msg(client, "501 Unimplemented method", "501 error", buf);
         return;
       }
+    //serve_file(client, "htdocs/metrics/data",req.useragent);
+    //return;
+    if (( !strcmp("/metrics", req.parm_v[0]) ) && strcasecmp(req.method, "GET")==0 )
+      {
+        serve_file(client, "htdocs/exporter/data",req.useragent);
+        //close(client);
+        //shutdown(client, 2);
+        return;
+      }
     if (req.parm_v[0][strlen(req.parm_v[0]) - 1] == '/')
         sprintf(path, "htdocs%sindex.html", req.parm_v[0]);
     else
-        strcpy(path, req.parm_v[0]);
+        sprintf(path, "htdocs%s", req.parm_v[0]);
+
 
     if (stat(path, &st) == -1)
       {
@@ -236,9 +251,9 @@ void accept_request(int client)
         not_found(client);
     if ((st.st_mode&S_IFMT)==S_IFREG && (st.st_mode&S_IRUSR)>0)
       {
-        serve_file(client, path);
-        close(client);
-        shutdown(client, 2);
+        serve_file(client, path,req.useragent);
+        //close(client);
+        //shutdown(client, 2);
         return;
       }
 /*
@@ -276,7 +291,7 @@ void accept_request(int client)
 
     if ( (st.st_mode & 0100000) && (st.st_mode & 0400) )
       {
-        serve_file(client, path);
+        serve_file(client, path,req.useragent);
         close(client);
         shutdown(client, 2);
         return;
@@ -293,8 +308,8 @@ void accept_request(int client)
         }
     }
 */
-    close(client);
-    shutdown(client, 2);
+    //close(client);
+    //shutdown(client, 2);
 }
 
 void discard_headers(int client)
@@ -448,10 +463,10 @@ void execute_cgi(int client, const char *path, char* const *args, const char *me
 /**********************************************************************/
 void not_found(int client)
 {
-    discard_headers(client);
-    resp_msg(client, "404 NOT FOUND", "Not Found", "The server could not fulfill\r\n"
-                     "your request because the resource specified\r\n"
-                     "is unavailable or nonexistent.\r\n");
+    //discard_headers(client);
+    resp_msg(client, "404 NOT FOUND", "404 Not Found", "<center><font color=#888800><B>404 ERROR: <br></B></font>"
+                     "&nbsp;&nbsp;&nbsp;&nbsp;Your request could not be fulfilled\r\n"
+                     "because the requested resource is unavailable or nonexistent.\r\n</center>");
 }
 
 /**********************************************************************/
@@ -461,29 +476,49 @@ void not_found(int client)
  *              file descriptor
  *             the name of the file to serve */
 /**********************************************************************/
-void serve_file(int client, const char *filename)
+void serve_file(int client, const char *filename, char ua[])
 {
     FILE *resource = NULL;
-    int numchars = 1;
+    int numchars = 1, wrap=0;
+    long content_len=0;
     char buf[256];
-
+    ua[4]='\0';
+    if (( strcmp(ua,"prom")!=0 ) && ( strcmp(ua,"Prom")!=0 ))
+      {
+        wrap=1;
+      }
     resource = fopen(filename, "r");
     if (resource == NULL)
         not_found(client);
     else
       {  
         fseek(resource, 0, SEEK_END);
+        if(wrap)
+            content_len=ftell(resource)+strlen("<pre></pre>");
+        else
+            content_len=ftell(resource);
+
         sprintf(buf, "HTTP/1.0 200 OK\r\n"
                      SERVER_STRING
                      "Content-Type: text/html\r\n"
-                     "Content-Length: %ld\r\n\r\n", ftell(resource));
-        fseek(resource, 0, SEEK_SET);;
+                     "Content-Length: %ld\r\n\r\n", content_len);
+        fseek(resource, 0, SEEK_SET);
         send(client, buf, strlen(buf), 0);
+        if (wrap)
+          {
+            sprintf(buf,"<pre>");
+            send(client, buf, strlen(buf), 0);
+          }
         cat(client, resource);
+        if (wrap)
+          {
+            sprintf(buf,"</pre>");
+            send(client, buf, strlen(buf), 0);
+          }
         fclose(resource);
     }
-  close(client);
-  shutdown(client, 2);
+  //close(client);
+  //shutdown(client, 2);
 }
 
 /**********************************************************************/
@@ -523,6 +558,7 @@ int startup(u_short *port)
 
 void resp_msg(int client, char *status, char *title, char *msg)
   {
+    printf("Debug: entering resp_msg");
     if ((NULL==status)||(NULL==title)||(NULL==msg))
       {
         printf("! Invalid invocation of func resp_msg.");
@@ -577,8 +613,8 @@ void resp_msg(int client, char *status, char *title, char *msg)
     sprintf(buf_cl, "Content-Length: %ld\r\n\r\n", strlen(buf));
     send(client, buf_cl, strlen(buf_cl), 0);
     send(client, buf, strlen(buf), 0);
-    close(client);
-    shutdown(client, 2);
+    //close(client);
+    //shutdown(client, 2);
   }
 
 void handle_post_req(int client)
@@ -654,6 +690,7 @@ int main(void)
     pid_t fpid;
     struct sockaddr_in client_name;
     int client_name_len = sizeof(client_name);
+    int counter = 0;
     server_sock = startup(&port);
     printf("httpd running on port %d\n", port);
 
@@ -668,7 +705,21 @@ int main(void)
         fpid = fork();
         if (fpid == 0)
           {
+            //printf("Child with pid: %d\n", getpid());
+            close(server_sock);
             accept_request(client_sock);
+            close(client_sock);
+            return(0);
+          }
+        else
+          {
+            //printf("Parent with pid: %d, child's pid: %d\n", getpid(), fpid);
+            close(client_sock);
+            counter = 0;
+            while(counter++ < 8 && waitpid(-1,NULL,WNOHANG|WUNTRACED) >=0 )
+              {
+                sleep(1);
+              }
           }
     }
 

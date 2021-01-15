@@ -1,0 +1,10 @@
+groups:
+- name: group1
+  rules:
+  - alert: fs_usage_percent higher than 30%
+    expr: fs_usage_percent > 30
+    for: 1m
+    labels:
+      severity: page
+    annotations:
+      summary: fs usage too high.

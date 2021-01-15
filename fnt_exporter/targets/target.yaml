@@ -1,0 +1,5 @@
+- targets:
+    - 192.168.43.196:60080
+  labels:
+    consumer: test
+    location: wsl

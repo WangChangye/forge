@@ -1,0 +1,129 @@
+#!/bin/bash
+export LC_ALL="en_US.UTF-8"
+export LC_TIME="en_US.UTF-8"
+cudir=`pwd`
+srcdir=`dirname $0`
+cd $srcdir
+srcdir=`pwd`
+srcexe="`basename $0`"
+target="fnt_exporter_server"
+if [ "$1" == "start" ];then
+    if [ ! -e active.flag ];then
+        date>${srcdir}/active.flag
+    fi
+    if [ `ps -ef | grep "\.\/${srcexe}\ 1"|grep -v grep|wc -l` -eq 0 ];then
+        printf "Starting fnt-exporter watchdogs..."
+        ./${srcexe} 1 >/dev/null 2>&1 &
+        rc=$?
+        if [ $rc -eq 0 ];then
+            echo "done"
+        else
+            echo "failed"
+        fi
+        exit $rc
+    else
+        echo "fnt-exporter watchdogs are already in running status."
+        curl http://127.0.0.1:60080 -v 2>&1| grep "HTTP\/.\+\ 200\ OK" -q
+        if [ $? -ne 0 ];then
+            printf "Starting fnt-exporter..."
+            rc=1
+            counter=0
+            while [ ${counter} -lt 32 ];do
+                ps -ef | awk '/\ \.\/'${target}'$/{print $2}' | xargs -n1 kill -9
+                ./${target} >${target}.log 2>&1 &
+                sleep 2
+                curl http://127.0.0.1:60080 -v 2>&1| grep "HTTP\/.\+\ 200\ OK" -q
+                if [ $? -eq 0 ];then
+                    rc=0
+                    break
+                fi
+                printf "."
+                let counter=${counter}+1
+            done
+            if [ $rc -eq 0 ];then
+                echo "done"
+            else
+                echo "failed"
+            fi
+            exit $rc
+        else
+            echo "fnt-exporter is already in running status."
+            exit 0
+        fi
+    fi
+    exit 0
+elif [ "$1" == "stop" ];then
+    printf "Stopping fnt-exporter..."
+    rm -f active.flag
+    ps -ef | awk '/\ \.\/'${target}'$/{print $2}' | xargs -n1 kill -9
+    rc=$?
+    if [ $rc -eq 0 ];then
+        echo "done"
+    else
+        echo "failed"
+    fi
+    exit $rc
+elif [ "$1" == "check" ];then
+    if [ ! -e ${srcdir}/active.flag ];then
+        echo "`date +%F" "%T` fnt-exporter: stopped."
+        exit 0
+    fi
+    if [ `ps -ef | grep "\.\/${srcexe}\ 1"|grep -v grep|wc -l` -eq 0 ];then
+        printf "`date +%F" "%T` fnt-exporter: Restarting watchdog 1..."
+        ./${srcexe} 1 >/dev/null 2>&1 &
+        rc=$?
+        if [ $rc -eq 0 ];then
+            echo "done"
+        else
+            echo "failed"
+        fi
+        exit $rc
+    else
+        echo "`date +%F" "%T` fnt-exporter: Watchdog n1 for fnt-exporter is running."
+    fi
+    exit 0
+elif [ "$1" == "simplecheck" ];then
+    curl http://127.0.0.1:60080 -v 2>&1| grep "HTTP\/.\+\ 200\ OK" -q
+    if [ $? -ne 0 ];then
+        ps -ef | awk '/\ \.\/'${target}'$/{print $2}' | xargs -n1 kill -9
+        echo "`date +%F" "%T` fnt-exporter: Restarting exporter..."
+        sleep 32
+        ./${target} >${target}.log 2>&1 &
+        curl http://127.0.0.1:60080 -v 2>&1| grep "HTTP\/.\+\ 200\ OK" -q
+        exit $?
+    fi
+    exit 0
+elif [ "$1" == "1" ];then
+    buddy_id=2
+    buddy_dura=83
+    self_dura=111
+elif [ "$1" == "2" ];then
+    buddy_id=1
+    buddy_dura=111
+    self_dura=83
+# show status
+else
+    if [ `ps -ef | grep "\.\/${srcexe}\ [12]"|grep -v grep|wc -l` -ne 0 ];then
+        echo "Watchdog status: running(`ps -ef | grep "\.\/${srcexe}\ [12]"|grep -v grep|wc -l`/2)."
+    else
+        echo "Watchdog status: stopped."
+    fi
+    curl http://127.0.0.1:60080 -v 2>&1| grep "HTTP\/.\+\ 200\ OK" -q
+    if [ $? -ne 0 ];then
+        echo "Exporter status: stopped."
+    else
+        echo "Exporter status: running."
+    fi
+    exit 0
+fi
+while [ -e ${srcdir}/active.flag ];do
+    curl http://127.0.0.1:60080 -v 2>&1| grep "HTTP\/.\+\ 200\ OK" -q
+    if [ $? -ne 0 ];then
+        ./${target} >${target}.log 2>&1 &
+    fi
+    if [ `ps -ef | grep "\.\/${srcexe}\ ${buddy_id}"|grep -v grep|wc -l` -eq 0 ];then
+        ./${srcexe} ${buddy_id} >/dev/null 2>&1 &
+    fi
+    sleep ${self_dura}
+done
+exit 0

@@ -1,0 +1,4 @@
+# HELP fnt_exporter_days A gauge of the pause duration of garbage collection cycles.
+# TYPE fnt_exporter_days gauge
+fnt_exporter_days{quantile="0"} 7
+fnt_exporter_days{quantile="1"} 0

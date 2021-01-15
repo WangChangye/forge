@@ -1,0 +1,22 @@
+[
+ {
+      "targets": [
+         "172.16.0.96:30013",
+         "172.16.0.96:30015"
+      ],
+      "labels": {
+         "consumer": "xxgk",
+         "location": "wsl"
+      }
+   },
+{
+      "metrics_path": "/exporter/data1",
+      "targets": [
+         "192.168.43.196:60080"
+      ],
+      "labels": {
+         "consumer": "test",
+         "location": "wsl"
+      }
+   }
+]

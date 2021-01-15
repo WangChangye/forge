@@ -1,0 +1,5 @@
+- targets:
+    - 192.168.43.19:60080
+  labels:
+    consumer: test1
+    location: wsl

@@ -1,0 +1,2 @@
+*/4 * * * *   root    /opt/fnt_exporter/fnt-daemon check >>/var/log/cron.log 2>&1
+*/2 * * * *   root    /opt/fnt_exporter/scraper.sh
